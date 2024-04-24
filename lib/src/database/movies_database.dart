@@ -1,66 +1,64 @@
+import 'dart:async';
+import 'package:ets/src/pages/movie.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
-class DatabaseHelper {
-  static final _databaseName = "movies_database.db";
-  static final _databaseVersion = 1;
-
-  static final table = 'movies';
-
-  static final columnId = '_id';
-  static final columnName = 'name';
-  static final columnDirector = 'director';
-  static final columnYear = 'year';
-
-  DatabaseHelper._privateConstructor();
-  static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
-
+class MovieDatabase {
   static Database _database;
+  static final MovieDatabase instance = MovieDatabase._init();
+
+  MovieDatabase._init();
 
   Future<Database> get database async {
     if (_database != null) return _database;
-    _database = await _initDatabase();
+
+    _database = await _initDB('movies.db');
     return _database;
   }
 
-  _initDatabase() async {
-    String path = join(await getDatabasesPath(), _databaseName);
-    return await openDatabase(path,
-        version: _databaseVersion, onCreate: _onCreate);
+  Future<Database> _initDB(String filePath) async {
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, filePath);
+
+    return await openDatabase(path, version: 1, onCreate: _createDB);
   }
 
-  Future _onCreate(Database db, int version) async {
-    await db.execute('''
-          CREATE TABLE $table (
-            $columnId INTEGER PRIMARY KEY,
-            $columnName TEXT NOT NULL,
-            $columnDirector TEXT NOT NULL,
-            $columnYear INTEGER NOT NULL
-          )
-          ''');
+  Future<void> _createDB(Database db, int version) async {
+    await db.execute(
+      'CREATE TABLE movies(id INTEGER PRIMARY KEY, title TEXT, posterUrl TEXT, description TEXT)',
+    );
   }
 
-  Future<int> insert(Map<String, dynamic> row) async {
-    Database db = await instance.database;
-    return await db.insert(table, row);
+  Future<Movie> create(Movie movie) async {
+    final db = await instance.database;
+    final id = await db.insert('movies', movie.toMap());
+    return movie.copy(id: id);
   }
 
-  Future<List<Map<String, dynamic>>> queryAllRows() async {
-    Database db = await instance.database;
-    return await db.query(table);
+  Future<List<Movie>> getAllMovies() async {
+    final db = await instance.database;
+    final List<Map<String, dynamic>> maps = await db.query('movies');
+    return List.generate(maps.length, (i) {
+      return Movie.fromMap(maps[i]);
+    });
   }
-}
 
-void main() async {
-  // Open the database and insert some movies
-  DatabaseHelper dbHelper = DatabaseHelper.instance;
-  await dbHelper.insert({
-    DatabaseHelper.columnName: 'Siksa Kubur',
-    DatabaseHelper.columnDirector: 'Joko Anwar',
-    DatabaseHelper.columnYear: 2024
-  });
+  Future<void> update(Movie movie) async {
+    final db = await instance.database;
+    await db.update(
+      'movies',
+      movie.toMap(),
+      where: 'id = ?',
+      whereArgs: [movie.id],
+    );
+  }
 
-  // Print out the movies
-  List<Map<String, dynamic>> movies = await dbHelper.queryAllRows();
-  print(movies);
+  Future<void> delete(int id) async {
+    final db = await instance.database;
+    await db.delete(
+      'movies',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
 }
